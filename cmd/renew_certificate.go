@@ -181,8 +181,15 @@ func restartControlPlaneService() error {
 		"statefulsets/dapr-placement-server",
 	}
 	// The scheduler control plane service only exists for runtime 1.14 onwards,
-	// so restart it only when it is present in the cluster.
-	if _, err := utils.RunCmdAndWait("kubectl", "get", "statefulsets/dapr-scheduler-server", "-n", namespace); err == nil {
+	// so restart it only when it is present in the cluster. --ignore-not-found
+	// makes absence the only non-error outcome with empty output: any other
+	// probe failure (RBAC, transient API error) must fail the restart loudly
+	// rather than silently skipping the scheduler.
+	out, err := utils.RunCmdAndWait("kubectl", "get", "statefulsets/dapr-scheduler-server", "-n", namespace, "--ignore-not-found", "-o", "name")
+	if err != nil {
+		return fmt.Errorf("failed to check for dapr-scheduler-server statefulset: %w", err)
+	}
+	if strings.TrimSpace(out) != "" {
 		controlPlaneServices = append(controlPlaneServices, "statefulsets/dapr-scheduler-server")
 	}
 
